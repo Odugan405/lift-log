@@ -125,6 +125,7 @@
 <nav class="tabs" id="tabs"></nav>
 <div class="toast" id="toast"></div>
 
+<script src="seed-data.js"></script>
 <script>
 "use strict";
 /* ============ storage ============ */
@@ -177,9 +178,11 @@ function freshDB() {
   };
 }
 
+// starting data: saved state, else the bundled seed (Boostcamp import), else a blank program
+const seedDB = () => window.SEED_DB ? JSON.parse(JSON.stringify(window.SEED_DB)) : freshDB();
 let db;
-try { db = JSON.parse(localStorage.getItem(LS_KEY)) || freshDB(); }
-catch { db = freshDB(); }
+try { db = JSON.parse(localStorage.getItem(LS_KEY)) || seedDB(); }
+catch { db = seedDB(); }
 function save() { localStorage.setItem(LS_KEY, JSON.stringify(db)); }
 
 /* ============ helpers ============ */
@@ -614,7 +617,7 @@ function doImport() {
 function resetAll() {
   if (!confirm("Delete ALL data — program, exercises, and history?")) return;
   if (!confirm("Really sure? This cannot be undone.")) return;
-  db = freshDB(); save(); render();
+  db = seedDB(); save(); render();
 }
 
 function openProgramEditor() {

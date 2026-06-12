@@ -64,8 +64,11 @@
   .lasttime{background:var(--card2);border-radius:10px;padding:8px 10px;margin-bottom:10px;
     font-size:13.5px;color:var(--muted);line-height:1.5;}
   .lasttime b{color:var(--text);font-weight:600;}
-  .setrow{display:grid;grid-template-columns:34px 1fr 24px 1fr 46px;gap:8px;align-items:center;margin-bottom:8px;}
-  .setrow .setnum{color:var(--muted);font-size:14px;text-align:center;font-weight:600;}
+  .setrow{display:grid;grid-template-columns:32px 1fr 16px 1fr 44px 44px;gap:7px;align-items:center;margin-bottom:8px;}
+  .setrow .setnum{color:var(--muted);font-size:14px;text-align:center;font-weight:600;
+    background:none;border:none;padding:10px 0;}
+  .setrow .setnum.warm{color:var(--amber);}
+  .setrow input.rpe{padding:11px 2px;font-size:14px;color:var(--blue);}
   .setrow .x{color:var(--muted);text-align:center;}
   .setrow input{padding:11px 6px;}
   .setrow.done input{border-color:var(--accent2);background:rgba(46,160,67,.12);}
@@ -106,6 +109,13 @@
   .mt{margin-top:12px;} .mb{margin-bottom:12px;}
   .center{text-align:center;}
   .bigstat{font-size:24px;font-weight:800;}
+  .restbar{position:fixed;left:12px;right:12px;bottom:calc(70px + env(safe-area-inset-bottom));
+    background:var(--card2);border:1px solid var(--accent2);border-radius:14px;padding:10px 14px;
+    display:none;align-items:center;gap:12px;z-index:60;box-shadow:0 4px 20px rgba(0,0,0,.5);}
+  .restbar.show{display:flex;}
+  .restbar .t{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--accent);}
+  .exnote{color:var(--blue);font-size:13px;margin:2px 0 6px;white-space:pre-wrap;}
+  .chartsvg{width:100%;height:auto;display:block;}
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(86px + env(safe-area-inset-bottom));
     background:var(--card2);border:1px solid var(--border);color:var(--text);padding:10px 18px;
     border-radius:999px;z-index:200;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none;}
@@ -124,6 +134,11 @@
 <main id="main"></main>
 <nav class="tabs" id="tabs"></nav>
 <div class="toast" id="toast"></div>
+<div class="restbar" id="restbar">
+  <div>Rest</div><div class="t" id="restTime">0:00</div><div class="grow"></div>
+  <button class="btn btn-sm" onclick="adjustRest(30)">+30s</button>
+  <button class="btn btn-sm" onclick="skipRest()">Skip</button>
+</div>
 
 <script src="seed-data.js"></script>
 <script>
@@ -209,8 +224,54 @@ function daysAgo(iso) {
   return d === 0 ? "today" : d === 1 ? "yesterday" : d + " days ago";
 }
 function fmtSets(sets) {
-  return sets.map(s => `${s.weight ?? 0}×${s.reps ?? 0}`).join(", ");
+  return sets.map(s => (s.warmup ? "W " : "") + `${s.weight ?? 0}×${s.reps ?? 0}` +
+    (s.rpe ? ` @${s.rpe}` : "")).join(", ");
 }
+const est1RM = (w, r) => !w || !r ? 0 : r === 1 ? w : w * (1 + r / 30); // Epley
+function topEst1RM(sets) { // best estimated 1RM among working sets
+  let best = 0;
+  for (const s of sets) if (!s.warmup) best = Math.max(best, est1RM(s.weight, s.reps));
+  return best;
+}
+function fmtDur(min) { return min >= 60 ? Math.floor(min/60) + "h " + (min%60) + "m" : min + "m"; }
+
+/* ---- rest timer & workout clock ---- */
+const exRest = id => { const e = exById(id); return e && e.rest != null ? e.rest : 120; };
+function setExRest(id, v) { const e = exById(id); if (e) { e.rest = +v; save(); } }
+const REST_OPTS = [0, 60, 90, 120, 150, 180, 240, 300];
+const fmtClock = s => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+function restSelect(id) {
+  return `<select style="width:auto;padding:4px 6px;font-size:13px;display:inline-block"
+    onchange="setExRest('${id}', this.value)">${REST_OPTS.map(o =>
+    `<option value="${o}" ${exRest(id)===o?"selected":""}>${o ? "⏱ " + fmtClock(o) : "⏱ off"}</option>`).join("")}</select>`;
+}
+let restEnd = null;
+let audioCtx = null;
+function startRest(sec) { if (sec > 0) restEnd = Date.now() + sec * 1000; }
+function adjustRest(sec) { if (restEnd) restEnd += sec * 1000; tick(); }
+function skipRest() { restEnd = null; tick(); }
+function beep() {
+  try {
+    if (!audioCtx) return;
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    o.frequency.value = 880; g.gain.setValueAtTime(0.25, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
+    o.start(); o.stop(audioCtx.currentTime + 0.6);
+  } catch {}
+}
+function tick() {
+  const bar = document.getElementById("restbar");
+  if (restEnd) {
+    const left = Math.ceil((restEnd - Date.now()) / 1000);
+    if (left <= 0) { restEnd = null; bar.classList.remove("show"); beep(); toast("Rest over — go!"); }
+    else { bar.classList.add("show"); document.getElementById("restTime").textContent = fmtClock(left); }
+  } else bar.classList.remove("show");
+  const el = document.getElementById("elapsed");
+  if (el && db.draft && db.draft.startedAt)
+    el.textContent = fmtClock(Math.floor((Date.now() - db.draft.startedAt) / 1000));
+}
+setInterval(tick, 500);
 // most recent logged performance of an exercise (searches logs newest-first)
 function lastPerformance(exerciseId, beforeLogId) {
   for (let i = db.logs.length - 1; i >= 0; i--) {
@@ -286,6 +347,8 @@ function render() {
 
   if (tab === "exercises" && exerciseDetailId)
     top.innerHTML = `<button class="btn-ghost" onclick="exerciseDetailId=null;render()">‹ Back</button>`;
+  if (tab === "workout" && db.draft && db.draft.startedAt)
+    top.innerHTML = `<span class="muted" id="elapsed" style="font-variant-numeric:tabular-nums"></span>`;
 }
 
 /* ============ start screen ============ */
@@ -309,6 +372,8 @@ function startWorkout(dayId) {
   db.draft = {
     id: uid(),
     date: todayISO(),
+    startedAt: Date.now(),
+    note: "",
     dayId: day ? day.id : null,
     dayName: day ? day.name : "Custom workout",
     entries: (day ? day.items : []).map(it => makeEntry(it.exerciseId, it.sets, it.reps)),
@@ -321,7 +386,7 @@ function makeEntry(exerciseId, nSets, repsTarget) {
     exerciseId, repsTarget: repsTarget || "", swappedFromId: null,
     sets: Array.from({ length: nSets || 3 }, (_, i) => ({
       weight: last && last.sets[i] ? last.sets[i].weight : (last && last.sets.length ? last.sets[last.sets.length-1].weight : null),
-      reps: null, done: false,
+      reps: null, rpe: null, warmup: last && last.sets[i] ? !!last.sets[i].warmup : false, done: false,
     })),
   };
 }
@@ -334,27 +399,33 @@ function viewActiveWorkout() {
     const lastHtml = last
       ? `<div class="lasttime">Last time <b>(${fmtDate(last.date)}, ${daysAgo(last.date)})</b>: <b>${fmtSets(last.sets)}</b> ${exUnit(en.exerciseId)}</div>`
       : `<div class="lasttime">First time logging this exercise — set a baseline!</div>`;
+    const ex = exById(en.exerciseId);
     const rows = en.sets.map((s, si) => `
       <div class="setrow ${s.done ? "done" : ""}">
-        <div class="setnum">${si + 1}</div>
+        <button class="setnum ${s.warmup ? "warm" : ""}" onclick="toggleWarmup(${ei},${si})"
+          title="tap to mark warm-up">${s.warmup ? "W" : si + 1}</button>
         <input type="number" inputmode="decimal" step="any" placeholder="${last && last.sets[si] ? last.sets[si].weight : "wt"}"
           value="${s.weight ?? ""}" onchange="setField(${ei},${si},'weight',this.value)">
         <div class="x">×</div>
         <input type="number" inputmode="numeric" placeholder="${last && last.sets[si] ? last.sets[si].reps : "reps"}"
           value="${s.reps ?? ""}" onchange="setField(${ei},${si},'reps',this.value)">
+        <input type="number" inputmode="decimal" step="any" class="rpe" placeholder="rpe"
+          value="${s.rpe ?? ""}" onchange="setField(${ei},${si},'rpe',this.value)">
         <button class="checkbtn ${s.done ? "on" : ""}" onclick="toggleDone(${ei},${si})">✓</button>
       </div>`).join("");
     return `<div class="card ex-block">
       <div class="ex-head">
         <div><div class="name">${esc(exName(en.exerciseId))}</div>
-          <div class="ex-target">${en.sets.length} sets${en.repsTarget ? " × " + esc(en.repsTarget) + " reps" : ""} · ${unitSelect(en.exerciseId)}</div>
+          <div class="ex-target">${en.sets.length} sets${en.repsTarget ? " × " + esc(en.repsTarget) + " reps" : ""} · ${unitSelect(en.exerciseId)} · ${restSelect(en.exerciseId)}</div>
           ${en.swappedFromId ? `<div class="swap-note">swapped from ${esc(exName(en.swappedFromId))}</div>` : ""}
         </div>
         <div style="white-space:nowrap">
+          <button class="btn btn-sm" onclick="editExNote('${en.exerciseId}')">📝</button>
           <button class="btn btn-sm" onclick="openSwap(${ei})">Swap</button>
           <button class="btn btn-sm" onclick="removeEntry(${ei})">✕</button>
         </div>
       </div>
+      ${ex && ex.note ? `<div class="exnote">${esc(ex.note)}</div>` : ""}
       ${lastHtml}
       ${rows}
       <button class="btn-ghost" onclick="addSet(${ei})">+ Add set</button>
@@ -363,8 +434,20 @@ function viewActiveWorkout() {
 
   return `${blocks}
     <button class="btn btn-block" onclick="openAddExercise()">+ Add exercise</button>
+    <div class="card mt"><h3>Workout notes</h3>
+      <textarea rows="2" placeholder="How did it go?"
+        onchange="db.draft.note=this.value;save()">${esc(d.note || "")}</textarea></div>
     <button class="btn btn-primary btn-block mt" onclick="finishWorkout()">Finish workout</button>
     <button class="btn-danger btn btn-block mt" onclick="cancelWorkout()">Discard workout</button>`;
+}
+function toggleWarmup(ei, si) {
+  const s = db.draft.entries[ei].sets[si];
+  s.warmup = !s.warmup; save(); render();
+}
+function editExNote(id) {
+  const e = exById(id); if (!e) return;
+  const note = prompt("Note for " + e.name + " (cues, setup, etc.)", e.note || "");
+  if (note !== null) { e.note = note.trim(); save(); render(); }
 }
 
 function setField(ei, si, field, val) {
@@ -378,6 +461,8 @@ function toggleDone(ei, si) {
     const last = lastPerformance(db.draft.entries[ei].exerciseId);
     if (s.weight == null && last && last.sets[si]) s.weight = last.sets[si].weight;
     if (s.reps == null && last && last.sets[si]) s.reps = last.sets[si].reps;
+    try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch {}
+    startRest(exRest(db.draft.entries[ei].exerciseId));
   }
   s.done = !s.done;
   save(); render();
@@ -385,7 +470,7 @@ function toggleDone(ei, si) {
 function addSet(ei) {
   const sets = db.draft.entries[ei].sets;
   const prev = sets[sets.length - 1];
-  sets.push({ weight: prev ? prev.weight : null, reps: null, done: false });
+  sets.push({ weight: prev ? prev.weight : null, reps: null, rpe: null, warmup: false, done: false });
   save(); render();
 }
 function removeEntry(ei) {
@@ -396,13 +481,36 @@ function finishWorkout() {
   const entries = db.draft.entries
     .map(en => ({ exerciseId: en.exerciseId, swappedFromId: en.swappedFromId,
       sets: en.sets.filter(s => s.done || (s.weight != null && s.reps != null))
-                   .map(s => ({ weight: s.weight, reps: s.reps })) }))
+                   .map(s => ({ weight: s.weight, reps: s.reps, rpe: s.rpe, warmup: !!s.warmup })) }))
     .filter(en => en.sets.length);
   if (!entries.length) { toast("Nothing logged yet — check off some sets first"); return; }
-  db.logs.push({ id: db.draft.id, date: db.draft.date, dayId: db.draft.dayId,
-    dayName: db.draft.dayName, entries });
+  const existingIdx = db.logs.findIndex(l => l.id === db.draft.id);
+  // PR check (new workouts only): top working-set weight vs all-time best
+  const prs = [];
+  if (existingIdx < 0) for (const en of entries) {
+    const top = Math.max(0, ...en.sets.filter(s => !s.warmup).map(s => s.weight || 0));
+    const prev = bestSet(en.exerciseId);
+    if (top > 0 && (!prev || top > prev.weight)) prs.push(exName(en.exerciseId));
+  }
+  const log = { id: db.draft.id, date: db.draft.date, dayId: db.draft.dayId,
+    dayName: db.draft.dayName, note: db.draft.note || "",
+    duration: db.draft.startedAt ? Math.max(1, Math.round((Date.now() - db.draft.startedAt) / 60000))
+              : (existingIdx >= 0 ? db.logs[existingIdx].duration : null),
+    entries };
+  if (existingIdx >= 0) db.logs[existingIdx] = log; else db.logs.push(log);
+  restEnd = null;
   db.draft = null; save(); render();
-  toast("Workout saved \u{1F4AA}");
+  toast(prs.length ? "New PR: " + prs.join(", ") + " \u{1F389}" : "Workout saved \u{1F4AA}");
+}
+function editLog(id) {
+  if (db.draft && !confirm("You have a workout in progress — replace it with this one for editing?")) return;
+  const log = db.logs.find(l => l.id === id); if (!log) return;
+  db.draft = { id: log.id, date: log.date, startedAt: null, note: log.note || "",
+    dayId: log.dayId, dayName: log.dayName,
+    entries: log.entries.map(en => ({ exerciseId: en.exerciseId, repsTarget: "",
+      swappedFromId: en.swappedFromId || null,
+      sets: en.sets.map(s => ({ ...s, done: true })) })) };
+  tab = "workout"; save(); render(); window.scrollTo(0, 0);
 }
 function cancelWorkout() {
   if (!confirm("Discard this workout? Nothing will be saved.")) return;
@@ -493,9 +601,11 @@ function viewHistory() {
     <div class="card histcard">
       <div class="flex">
         <div class="grow"><h3 style="margin:0">${esc(log.dayName)}</h3>
-          <div class="muted small">${fmtDate(log.date)} · ${daysAgo(log.date)}</div></div>
+          <div class="muted small">${fmtDate(log.date)} · ${daysAgo(log.date)}${log.duration ? " · " + fmtDur(log.duration) : ""}</div></div>
+        <button class="btn btn-sm" onclick="editLog('${log.id}')">Edit</button>
         <button class="btn btn-sm" onclick="deleteLog('${log.id}')">✕</button>
       </div>
+      ${log.note ? `<div class="exnote mt">${esc(log.note)}</div>` : ""}
       <div class="mt">${log.entries.map(en => `
         <div class="hist-entry"><b>${esc(exName(en.exerciseId))}</b>
           ${en.swappedFromId ? `<span class="swap-note">(swap)</span>` : ""}
@@ -535,12 +645,29 @@ function viewExerciseDetail() {
     const en = db.logs[i].entries.find(e => e.exerciseId === id);
     if (en) history.push({ date: db.logs[i].date, sets: en.sets });
   }
+  // best estimated 1RM across all sessions
+  let best1rm = 0;
+  for (const h of history) best1rm = Math.max(best1rm, topEst1RM(h.sets));
   return `
-    <div class="card center">
-      <div class="muted small">Best set</div>
-      <div class="bigstat">${best ? best.weight + " " + exUnit(id) + " × " + best.reps : "—"}</div>
-      ${best ? `<div class="muted small">${fmtDate(best.date)}</div>` : `<div class="muted small">no logs yet</div>`}
+    <div class="flex">
+      <div class="card center grow">
+        <div class="muted small">Best set</div>
+        <div class="bigstat">${best ? best.weight + "×" + best.reps : "—"}</div>
+        <div class="muted small">${best ? exUnit(id) + " · " + fmtDate(best.date) : "no logs yet"}</div>
+      </div>
+      <div class="card center grow">
+        <div class="muted small">Est. 1RM</div>
+        <div class="bigstat">${best1rm ? Math.round(best1rm) : "—"}</div>
+        <div class="muted small">${best1rm ? exUnit(id) + " (Epley)" : ""}</div>
+      </div>
     </div>
+    ${exerciseChart(id, history)}
+    <div class="card">
+      <div class="flex"><h3 class="grow" style="margin:0">Notes</h3>
+        <button class="btn btn-sm" onclick="editExNote('${id}');">Edit</button></div>
+      <div class="${exById(id).note ? "exnote mt" : "muted small mt"}">${esc(exById(id).note || "No notes — cues, setup, seat positions…")}</div>
+    </div>
+    <div class="card flex"><div class="grow">Rest timer</div>${restSelect(id)}</div>
     <div class="card">
       <h3>History (${history.length} sessions)</h3>
       ${history.length ? history.map(h => `
@@ -548,9 +675,34 @@ function viewExerciseDetail() {
           <div class="hist-sets">${fmtSets(h.sets)} ${exUnit(id)}</div></div>`).join("")
         : `<div class="muted small">Log this exercise in a workout and sessions appear here.</div>`}
     </div>
-    <div class="card flex"><div class="grow">Units for this exercise</div>${unitSelect(id)}</div>
+    <div class="card flex"><div class="grow">Units</div>${unitSelect(id)}</div>
     <button class="btn btn-block" onclick="renameExercise('${id}')">Rename exercise</button>
     <button class="btn btn-danger btn-block mt" onclick="deleteExercise('${id}')">Delete exercise</button>`;
+}
+function exerciseChart(id, history) {
+  // history arrives newest-first; chart oldest -> newest, top working-set est 1RM per session
+  const pts = [...history].reverse()
+    .map(h => ({ date: h.date, v: topEst1RM(h.sets) }))
+    .filter(p => p.v > 0).slice(-40);
+  if (pts.length < 2) return "";
+  const W = 320, H = 110, P = 8;
+  const vmin = Math.min(...pts.map(p => p.v)), vmax = Math.max(...pts.map(p => p.v));
+  const span = vmax - vmin || 1;
+  const x = i => P + i * (W - 2 * P) / (pts.length - 1);
+  const y = v => H - P - (v - vmin) * (H - 2 * P) / span;
+  const line = pts.map((p, i) => `${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
+  return `<div class="card">
+    <div class="flex"><h3 class="grow" style="margin:0">Est. 1RM trend</h3>
+      <span class="muted small">${fmtDate(pts[0].date)} → ${fmtDate(pts[pts.length-1].date)}</span></div>
+    <svg class="chartsvg mt" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2"
+        stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${x(pts.length-1)}" cy="${y(pts[pts.length-1].v)}" r="3.5" fill="var(--accent)"/>
+    </svg>
+    <div class="flex muted small"><span class="grow">low: ${Math.round(vmin)} ${exUnit(id)}</span>
+      <span>latest: ${Math.round(pts[pts.length-1].v)} ${exUnit(id)}</span>
+      <span class="grow right">peak: ${Math.round(vmax)} ${exUnit(id)}</span></div>
+  </div>`;
 }
 function renameExercise(id) {
   const e = exById(id); if (!e) return;

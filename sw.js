@@ -1,4 +1,4 @@
-const CACHE = "liftlog-v2";
+const CACHE = "liftlog-v3";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./seed-data.js", "./icon-180.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {

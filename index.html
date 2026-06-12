@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lift Log">
+<meta name="theme-color" content="#0d1117">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Lift Log</title>
+<style>
+  :root{
+    --bg:#0d1117; --card:#161b22; --card2:#1c2330; --border:#2d3748;
+    --text:#e6edf3; --muted:#8b949e; --accent:#3fb950; --accent2:#2ea043;
+    --blue:#58a6ff; --red:#f85149; --amber:#d29922;
+    --radius:14px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    font-size:16px; overscroll-behavior-y:none;}
+  body{padding-bottom:calc(70px + env(safe-area-inset-bottom));}
+  header.topbar{position:sticky;top:0;z-index:50;background:rgba(13,17,23,.92);
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    padding:calc(10px + env(safe-area-inset-top)) 16px 10px;
+    border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+  header.topbar h1{font-size:19px;margin:0;font-weight:700;}
+  main{padding:14px 14px 24px;max-width:560px;margin:0 auto;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+    padding:14px;margin-bottom:12px;}
+  .card h2{margin:0 0 4px;font-size:17px;}
+  .card h3{margin:0 0 8px;font-size:15px;}
+  .muted{color:var(--muted);font-size:13px;}
+  .small{font-size:13px;}
+  button{font-family:inherit;border:none;border-radius:10px;cursor:pointer;font-size:15px;}
+  .btn{background:var(--card2);color:var(--text);border:1px solid var(--border);
+    padding:10px 14px;font-weight:600;}
+  .btn:active{opacity:.7;}
+  .btn-primary{background:var(--accent2);border-color:var(--accent2);color:#fff;}
+  .btn-danger{background:transparent;border:1px solid var(--red);color:var(--red);}
+  .btn-block{display:block;width:100%;padding:14px;font-size:16px;}
+  .btn-sm{padding:6px 10px;font-size:13px;border-radius:8px;}
+  .btn-ghost{background:transparent;border:none;color:var(--blue);font-weight:600;padding:6px 8px;}
+  input,select,textarea{font-family:inherit;background:var(--bg);color:var(--text);
+    border:1px solid var(--border);border-radius:10px;padding:10px;font-size:16px;width:100%;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue);}
+  input[type=number]{text-align:center;-moz-appearance:textfield;}
+  input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+  /* bottom nav */
+  nav.tabs{position:fixed;bottom:0;left:0;right:0;z-index:50;display:flex;
+    background:rgba(13,17,23,.95);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom);}
+  nav.tabs button{flex:1;background:none;color:var(--muted);padding:10px 0 8px;
+    display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;border-radius:0;}
+  nav.tabs button.active{color:var(--accent);}
+  nav.tabs .ico{font-size:22px;line-height:1;}
+  /* workout */
+  .ex-block{margin-bottom:14px;}
+  .ex-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;}
+  .ex-head .name{font-size:17px;font-weight:700;}
+  .ex-target{color:var(--muted);font-size:13px;margin-top:1px;}
+  .lasttime{background:var(--card2);border-radius:10px;padding:8px 10px;margin-bottom:10px;
+    font-size:13.5px;color:var(--muted);line-height:1.5;}
+  .lasttime b{color:var(--text);font-weight:600;}
+  .setrow{display:grid;grid-template-columns:34px 1fr 24px 1fr 46px;gap:8px;align-items:center;margin-bottom:8px;}
+  .setrow .setnum{color:var(--muted);font-size:14px;text-align:center;font-weight:600;}
+  .setrow .x{color:var(--muted);text-align:center;}
+  .setrow input{padding:11px 6px;}
+  .setrow.done input{border-color:var(--accent2);background:rgba(46,160,67,.12);}
+  .checkbtn{width:46px;height:46px;border-radius:10px;background:var(--card2);
+    border:1px solid var(--border);color:var(--muted);font-size:20px;display:flex;
+    align-items:center;justify-content:center;}
+  .checkbtn.on{background:var(--accent2);border-color:var(--accent2);color:#fff;}
+  .ghostprev{position:absolute;pointer-events:none;}
+  .rowline{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
+  .rowline > *{flex:1;}
+  .pill{display:inline-block;background:var(--card2);border:1px solid var(--border);
+    border-radius:999px;padding:3px 10px;font-size:12px;color:var(--muted);margin:2px 4px 2px 0;}
+  .daybtn{display:flex;justify-content:space-between;align-items:center;width:100%;
+    background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+    padding:16px 14px;margin-bottom:10px;color:var(--text);text-align:left;}
+  .daybtn .dn{font-size:17px;font-weight:700;}
+  .daybtn .sub{color:var(--muted);font-size:13px;margin-top:3px;}
+  .daybtn .chev{color:var(--muted);font-size:20px;}
+  .daybtn.suggested{border-color:var(--accent2);}
+  .tag{font-size:11px;font-weight:700;color:var(--accent);border:1px solid var(--accent2);
+    border-radius:6px;padding:2px 6px;margin-left:8px;vertical-align:middle;}
+  /* modal */
+  .modal-wrap{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.6);display:flex;
+    align-items:flex-end;justify-content:center;}
+  .modal{background:var(--card);border-radius:18px 18px 0 0;width:100%;max-width:560px;
+    max-height:86vh;overflow-y:auto;padding:18px 16px calc(20px + env(safe-area-inset-bottom));}
+  .modal h2{margin:0 0 12px;font-size:18px;}
+  .exlist-item{display:flex;justify-content:space-between;align-items:center;padding:13px 4px;
+    border-bottom:1px solid var(--border);}
+  .exlist-item:active{background:var(--card2);}
+  .histcard{margin-bottom:10px;}
+  .hist-entry{padding:7px 0;border-bottom:1px solid var(--border);font-size:14px;}
+  .hist-entry:last-child{border-bottom:none;}
+  .hist-sets{color:var(--muted);}
+  .flex{display:flex;gap:8px;align-items:center;}
+  .grow{flex:1;}
+  .right{text-align:right;}
+  .mt{margin-top:12px;} .mb{margin-bottom:12px;}
+  .center{text-align:center;}
+  .bigstat{font-size:24px;font-weight:800;}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(86px + env(safe-area-inset-bottom));
+    background:var(--card2);border:1px solid var(--border);color:var(--text);padding:10px 18px;
+    border-radius:999px;z-index:200;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none;}
+  .toast.show{opacity:1;}
+  .prog-item{display:grid;grid-template-columns:1fr 56px 64px 30px;gap:6px;align-items:center;margin-bottom:6px;}
+  .prog-item select,.prog-item input{padding:8px 6px;font-size:14px;}
+  .swap-note{color:var(--amber);font-size:12px;margin-top:2px;}
+  details summary{cursor:pointer;}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1 id="topTitle">Lift Log</h1>
+  <div id="topAction"></div>
+</header>
+<main id="main"></main>
+<nav class="tabs" id="tabs"></nav>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ============ storage ============ */
+const LS_KEY = "liftlog_v1";
+const uid = () => Math.random().toString(36).slice(2, 10);
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+const SEED_EXERCISES = [
+  // Monday
+  "Hang Power Snatch","Bench Press","Chin-Up","AD + BTN Press","Chest Supported Row",
+  "Incline DB Bench","DB Pullover",
+  // Tuesday
+  "Vertical Jumps","Hang Clean","Hack Squat","Deficit DL + Pendlay Row","Leg Extension",
+  "Leg Press Calves","Side Bend",
+  // Thursday
+  "Jerk","Incline Bench","Wide Pull-Up","Dips","Cable Row","Lat Raises","Neck Flex/Ext",
+  // Friday
+  "Lateral Jumps","Power Clean","Pin Front Squat","Jefferson Curl","Pistol Squat",
+  "Seated Leg Curl","Decline Sit-Up",
+  // extras for swaps
+  "Squat","Deadlift","Overhead Press","Barbell Row","Romanian Deadlift","Lat Pulldown",
+  "Leg Press","DB Curl","Hammer Curl","Tricep Pushdown","Face Pull","Calf Raise","Cable Fly"
+];
+
+function freshDB() {
+  const exercises = SEED_EXERCISES.map(n => ({ id: uid(), name: n }));
+  const ex = name => exercises.find(e => e.name === name).id;
+  const items = names => names.map(n => ({ exerciseId: ex(n), sets: 3, reps: "" }));
+  return {
+    settings: { units: "lbs" },
+    exercises,
+    program: {
+      name: "My Program",
+      days: [
+        { id: uid(), name: "Monday", items: items([
+          "Hang Power Snatch","Bench Press","Chin-Up","AD + BTN Press","Chest Supported Row",
+          "Incline DB Bench","DB Pullover"]) },
+        { id: uid(), name: "Tuesday", items: items([
+          "Vertical Jumps","Hang Clean","Hack Squat","Deficit DL + Pendlay Row","Leg Extension",
+          "Leg Press Calves","Side Bend"]) },
+        { id: uid(), name: "Thursday", items: items([
+          "Jerk","Incline Bench","Wide Pull-Up","Dips","Cable Row","Lat Raises","Neck Flex/Ext"]) },
+        { id: uid(), name: "Friday", items: items([
+          "Lateral Jumps","Power Clean","Pin Front Squat","Jefferson Curl","Pistol Squat",
+          "Seated Leg Curl","Decline Sit-Up"]) },
+      ],
+    },
+    logs: [],     // {id, date, dayId, dayName, entries:[{exerciseId, swappedFromId?, sets:[{weight,reps}]}]}
+    draft: null,  // active workout
+  };
+}
+
+let db;
+try { db = JSON.parse(localStorage.getItem(LS_KEY)) || freshDB(); }
+catch { db = freshDB(); }
+function save() { localStorage.setItem(LS_KEY, JSON.stringify(db)); }
+
+/* ============ helpers ============ */
+const exById = id => db.exercises.find(e => e.id === id);
+const exName = id => (exById(id) || { name: "(deleted)" }).name;
+const units = () => db.settings.units;
+// per-exercise unit, falling back to the global default
+const exUnit = id => { const e = exById(id); return (e && e.unit) || db.settings.units; };
+function setExUnit(id, u) { const e = exById(id); if (e) { e.unit = u; save(); render(); } }
+function unitSelect(id) {
+  return `<select style="width:auto;padding:4px 6px;font-size:13px;display:inline-block"
+    onchange="setExUnit('${id}', this.value)">
+    <option value="lbs" ${exUnit(id)==='lbs'?'selected':''}>lbs</option>
+    <option value="kg" ${exUnit(id)==='kg'?'selected':''}>kg</option></select>`;
+}
+
+function fmtDate(iso) {
+  const d = new Date(iso + "T12:00:00");
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+function daysAgo(iso) {
+  const ms = new Date(todayISO()) - new Date(iso);
+  const d = Math.round(ms / 864e5);
+  return d === 0 ? "today" : d === 1 ? "yesterday" : d + " days ago";
+}
+function fmtSets(sets) {
+  return sets.map(s => `${s.weight ?? 0}×${s.reps ?? 0}`).join(", ");
+}
+// most recent logged performance of an exercise (searches logs newest-first)
+function lastPerformance(exerciseId, beforeLogId) {
+  for (let i = db.logs.length - 1; i >= 0; i--) {
+    const log = db.logs[i];
+    if (beforeLogId && log.id === beforeLogId) continue;
+    const entry = log.entries.find(e => e.exerciseId === exerciseId && e.sets.length);
+    if (entry) return { date: log.date, sets: entry.sets };
+  }
+  return null;
+}
+function bestSet(exerciseId) {
+  let best = null;
+  for (const log of db.logs)
+    for (const e of log.entries)
+      if (e.exerciseId === exerciseId)
+        for (const s of e.sets)
+          if (s.weight != null && (!best || s.weight > best.weight ||
+              (s.weight === best.weight && (s.reps || 0) > (best.reps || 0))))
+            best = { ...s, date: log.date };
+  return best;
+}
+function suggestedDayId() {
+  if (!db.program.days.length) return null;
+  // if a day is named after today's weekday and wasn't done yet today, suggest it
+  const weekday = new Date().toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+  const todayDay = db.program.days.find(d => weekday.startsWith(d.name.trim().toLowerCase().slice(0,3)) && d.name.trim().length >= 3);
+  if (todayDay && !db.logs.some(l => l.date === todayISO() && l.dayId === todayDay.id)) return todayDay.id;
+  const lastLog = [...db.logs].reverse().find(l => l.dayId);
+  if (!lastLog) return db.program.days[0].id;
+  const idx = db.program.days.findIndex(d => d.id === lastLog.dayId);
+  return db.program.days[(idx + 1) % db.program.days.length].id;
+}
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+/* ============ tabs / render root ============ */
+const TABS = [
+  { id: "workout",  label: "Workout",  ico: "\u{1F3CB}" },
+  { id: "history",  label: "History",  ico: "\u{1F4C5}" },
+  { id: "exercises",label: "Exercises",ico: "\u{1F4DA}" },
+  { id: "settings", label: "Settings", ico: "⚙️" },
+];
+let tab = "workout";
+let exerciseDetailId = null; // sub-view inside exercises tab
+
+function renderTabs() {
+  document.getElementById("tabs").innerHTML = TABS.map(t =>
+    `<button class="${t.id === tab ? "active" : ""}" onclick="switchTab('${t.id}')">
+      <span class="ico">${t.ico}</span>${t.label}</button>`).join("");
+}
+function switchTab(t) { tab = t; exerciseDetailId = null; render(); window.scrollTo(0,0); }
+
+function render() {
+  renderTabs();
+  const main = document.getElementById("main");
+  const top = document.getElementById("topAction");
+  top.innerHTML = "";
+  document.getElementById("topTitle").textContent =
+    tab === "workout" ? (db.draft ? db.draft.dayName : "Workout") :
+    tab === "history" ? "History" :
+    tab === "exercises" ? (exerciseDetailId ? exName(exerciseDetailId) : "Exercises") : "Settings";
+
+  if (tab === "workout") main.innerHTML = db.draft ? viewActiveWorkout() : viewStart();
+  else if (tab === "history") main.innerHTML = viewHistory();
+  else if (tab === "exercises") main.innerHTML = exerciseDetailId ? viewExerciseDetail() : viewExerciseList();
+  else main.innerHTML = viewSettings();
+
+  if (tab === "exercises" && exerciseDetailId)
+    top.innerHTML = `<button class="btn-ghost" onclick="exerciseDetailId=null;render()">‹ Back</button>`;
+}
+
+/* ============ start screen ============ */
+function viewStart() {
+  const sug = suggestedDayId();
+  const dayBtns = db.program.days.map(d => {
+    const lastLog = [...db.logs].reverse().find(l => l.dayId === d.id);
+    return `<button class="daybtn ${d.id === sug ? "suggested" : ""}" onclick="startWorkout('${d.id}')">
+      <div><div class="dn">${esc(d.name)}${d.id === sug ? '<span class="tag">UP NEXT</span>' : ""}</div>
+      <div class="sub">${d.items.length} exercises${lastLog ? " · last done " + daysAgo(lastLog.date) : ""}</div></div>
+      <div class="chev">›</div></button>`;
+  }).join("");
+  return `
+    <div class="muted mb" style="padding:0 2px">${esc(db.program.name)}</div>
+    ${dayBtns || '<div class="card muted">No program days yet — add some in Settings → Edit Program.</div>'}
+    <button class="btn btn-block mt" onclick="startWorkout(null)">Start empty workout</button>`;
+}
+
+function startWorkout(dayId) {
+  const day = db.program.days.find(d => d.id === dayId);
+  db.draft = {
+    id: uid(),
+    date: todayISO(),
+    dayId: day ? day.id : null,
+    dayName: day ? day.name : "Custom workout",
+    entries: (day ? day.items : []).map(it => makeEntry(it.exerciseId, it.sets, it.reps)),
+  };
+  save(); render();
+}
+function makeEntry(exerciseId, nSets, repsTarget) {
+  const last = lastPerformance(exerciseId);
+  return {
+    exerciseId, repsTarget: repsTarget || "", swappedFromId: null,
+    sets: Array.from({ length: nSets || 3 }, (_, i) => ({
+      weight: last && last.sets[i] ? last.sets[i].weight : (last && last.sets.length ? last.sets[last.sets.length-1].weight : null),
+      reps: null, done: false,
+    })),
+  };
+}
+
+/* ============ active workout ============ */
+function viewActiveWorkout() {
+  const d = db.draft;
+  const blocks = d.entries.map((en, ei) => {
+    const last = lastPerformance(en.exerciseId);
+    const lastHtml = last
+      ? `<div class="lasttime">Last time <b>(${fmtDate(last.date)}, ${daysAgo(last.date)})</b>: <b>${fmtSets(last.sets)}</b> ${exUnit(en.exerciseId)}</div>`
+      : `<div class="lasttime">First time logging this exercise — set a baseline!</div>`;
+    const rows = en.sets.map((s, si) => `
+      <div class="setrow ${s.done ? "done" : ""}">
+        <div class="setnum">${si + 1}</div>
+        <input type="number" inputmode="decimal" step="any" placeholder="${last && last.sets[si] ? last.sets[si].weight : "wt"}"
+          value="${s.weight ?? ""}" onchange="setField(${ei},${si},'weight',this.value)">
+        <div class="x">×</div>
+        <input type="number" inputmode="numeric" placeholder="${last && last.sets[si] ? last.sets[si].reps : "reps"}"
+          value="${s.reps ?? ""}" onchange="setField(${ei},${si},'reps',this.value)">
+        <button class="checkbtn ${s.done ? "on" : ""}" onclick="toggleDone(${ei},${si})">✓</button>
+      </div>`).join("");
+    return `<div class="card ex-block">
+      <div class="ex-head">
+        <div><div class="name">${esc(exName(en.exerciseId))}</div>
+          <div class="ex-target">${en.sets.length} sets${en.repsTarget ? " × " + esc(en.repsTarget) + " reps" : ""} · ${unitSelect(en.exerciseId)}</div>
+          ${en.swappedFromId ? `<div class="swap-note">swapped from ${esc(exName(en.swappedFromId))}</div>` : ""}
+        </div>
+        <div style="white-space:nowrap">
+          <button class="btn btn-sm" onclick="openSwap(${ei})">Swap</button>
+          <button class="btn btn-sm" onclick="removeEntry(${ei})">✕</button>
+        </div>
+      </div>
+      ${lastHtml}
+      ${rows}
+      <button class="btn-ghost" onclick="addSet(${ei})">+ Add set</button>
+    </div>`;
+  }).join("");
+
+  return `${blocks}
+    <button class="btn btn-block" onclick="openAddExercise()">+ Add exercise</button>
+    <button class="btn btn-primary btn-block mt" onclick="finishWorkout()">Finish workout</button>
+    <button class="btn-danger btn btn-block mt" onclick="cancelWorkout()">Discard workout</button>`;
+}
+
+function setField(ei, si, field, val) {
+  db.draft.entries[ei].sets[si][field] = val === "" ? null : +val;
+  save();
+}
+function toggleDone(ei, si) {
+  const s = db.draft.entries[ei].sets[si];
+  if (!s.done) {
+    // convenience: checking an empty set adopts placeholder (last time's numbers)
+    const last = lastPerformance(db.draft.entries[ei].exerciseId);
+    if (s.weight == null && last && last.sets[si]) s.weight = last.sets[si].weight;
+    if (s.reps == null && last && last.sets[si]) s.reps = last.sets[si].reps;
+  }
+  s.done = !s.done;
+  save(); render();
+}
+function addSet(ei) {
+  const sets = db.draft.entries[ei].sets;
+  const prev = sets[sets.length - 1];
+  sets.push({ weight: prev ? prev.weight : null, reps: null, done: false });
+  save(); render();
+}
+function removeEntry(ei) {
+  if (!confirm("Remove " + exName(db.draft.entries[ei].exerciseId) + " from this workout?")) return;
+  db.draft.entries.splice(ei, 1); save(); render();
+}
+function finishWorkout() {
+  const entries = db.draft.entries
+    .map(en => ({ exerciseId: en.exerciseId, swappedFromId: en.swappedFromId,
+      sets: en.sets.filter(s => s.done || (s.weight != null && s.reps != null))
+                   .map(s => ({ weight: s.weight, reps: s.reps })) }))
+    .filter(en => en.sets.length);
+  if (!entries.length) { toast("Nothing logged yet — check off some sets first"); return; }
+  db.logs.push({ id: db.draft.id, date: db.draft.date, dayId: db.draft.dayId,
+    dayName: db.draft.dayName, entries });
+  db.draft = null; save(); render();
+  toast("Workout saved \u{1F4AA}");
+}
+function cancelWorkout() {
+  if (!confirm("Discard this workout? Nothing will be saved.")) return;
+  db.draft = null; save(); render();
+}
+
+/* ============ swap & add-exercise modals ============ */
+let modalEl = null;
+function openModal(html) {
+  closeModal();
+  modalEl = document.createElement("div");
+  modalEl.className = "modal-wrap";
+  modalEl.innerHTML = `<div class="modal">${html}</div>`;
+  modalEl.addEventListener("click", e => { if (e.target === modalEl) closeModal(); });
+  document.body.appendChild(modalEl);
+}
+function closeModal() { if (modalEl) { modalEl.remove(); modalEl = null; } }
+
+function exercisePickerHtml(cbName, extra) {
+  const items = [...db.exercises].sort((a, b) => a.name.localeCompare(b.name)).map(e =>
+    `<div class="exlist-item" data-name="${esc(e.name.toLowerCase())}" onclick="${cbName}('${e.id}')">
+       <div>${esc(e.name)}</div><div class="muted">›</div></div>`).join("");
+  return `
+    <input id="pickSearch" placeholder="Search exercises…" oninput="filterPicker(this.value)" class="mb">
+    ${extra || ""}
+    <div id="pickList">${items}</div>
+    <div class="mt flex">
+      <input id="newExName" placeholder="New exercise name" class="grow">
+      <button class="btn" style="flex:none" onclick="createAndPick('${cbName}')">Create</button>
+    </div>`;
+}
+function filterPicker(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll("#pickList .exlist-item").forEach(el =>
+    el.style.display = el.dataset.name.includes(q) ? "" : "none");
+}
+function createAndPick(cbName) {
+  const name = document.getElementById("newExName").value.trim();
+  if (!name) return;
+  let e = db.exercises.find(x => x.name.toLowerCase() === name.toLowerCase());
+  if (!e) { e = { id: uid(), name }; db.exercises.push(e); save(); }
+  window[cbName](e.id);
+}
+
+let swapIdx = null;
+function openSwap(ei) {
+  swapIdx = ei;
+  openModal(`<h2>Swap ${esc(exName(db.draft.entries[ei].exerciseId))} for…</h2>
+    <label class="flex small mb" style="gap:8px">
+      <input type="checkbox" id="swapPermanent" style="width:auto"> Also replace it in my program permanently
+    </label>
+    ${exercisePickerHtml("doSwap")}`);
+}
+function doSwap(newId) {
+  const en = db.draft.entries[swapIdx];
+  const oldId = en.exerciseId;
+  if (newId !== oldId) {
+    const permanent = document.getElementById("swapPermanent")?.checked;
+    en.swappedFromId = en.swappedFromId || oldId;
+    en.exerciseId = newId;
+    // re-prefill weights from the new exercise's history
+    const last = lastPerformance(newId);
+    en.sets.forEach((s, i) => { if (!s.done) {
+      s.weight = last && last.sets[i] ? last.sets[i].weight : (last && last.sets.length ? last.sets[last.sets.length-1].weight : null);
+      s.reps = null;
+    }});
+    if (permanent && db.draft.dayId) {
+      const day = db.program.days.find(d => d.id === db.draft.dayId);
+      const item = day && day.items.find(it => it.exerciseId === oldId);
+      if (item) item.exerciseId = newId;
+    }
+  }
+  save(); closeModal(); render();
+}
+
+function openAddExercise() {
+  openModal(`<h2>Add exercise</h2>${exercisePickerHtml("doAddExercise")}`);
+}
+function doAddExercise(id) {
+  db.draft.entries.push(makeEntry(id, 3, ""));
+  save(); closeModal(); render();
+}
+
+/* ============ history ============ */
+function viewHistory() {
+  if (!db.logs.length) return `<div class="card muted">No workouts yet. Your finished sessions will show up here.</div>`;
+  return [...db.logs].reverse().map(log => `
+    <div class="card histcard">
+      <div class="flex">
+        <div class="grow"><h3 style="margin:0">${esc(log.dayName)}</h3>
+          <div class="muted small">${fmtDate(log.date)} · ${daysAgo(log.date)}</div></div>
+        <button class="btn btn-sm" onclick="deleteLog('${log.id}')">✕</button>
+      </div>
+      <div class="mt">${log.entries.map(en => `
+        <div class="hist-entry"><b>${esc(exName(en.exerciseId))}</b>
+          ${en.swappedFromId ? `<span class="swap-note">(swap)</span>` : ""}
+          <div class="hist-sets">${fmtSets(en.sets)} ${exUnit(en.exerciseId)}</div></div>`).join("")}
+      </div>
+    </div>`).join("");
+}
+function deleteLog(id) {
+  if (!confirm("Delete this workout from history?")) return;
+  db.logs = db.logs.filter(l => l.id !== id); save(); render();
+}
+
+/* ============ exercise database ============ */
+function viewExerciseList() {
+  const items = [...db.exercises].sort((a, b) => a.name.localeCompare(b.name)).map(e => {
+    const last = lastPerformance(e.id);
+    return `<div class="exlist-item" data-name="${esc(e.name.toLowerCase())}" onclick="exerciseDetailId='${e.id}';render()">
+      <div>${esc(e.name)}<div class="muted small">${last ? "last: " + fmtSets(last.sets) + " " + exUnit(e.id) + " · " + daysAgo(last.date) : "never logged"}</div></div>
+      <div class="muted">›</div></div>`;
+  }).join("");
+  return `<input placeholder="Search…" oninput="filterPicker(this.value)" class="mb">
+    <div class="card" id="pickList" style="padding:2px 12px">${items}</div>
+    <div class="flex mt"><input id="newExName" placeholder="New exercise name" class="grow">
+      <button class="btn" style="flex:none" onclick="addExerciseToDb()">Add</button></div>`;
+}
+function addExerciseToDb() {
+  const name = document.getElementById("newExName").value.trim();
+  if (!name) return;
+  if (db.exercises.some(x => x.name.toLowerCase() === name.toLowerCase())) { toast("Already exists"); return; }
+  db.exercises.push({ id: uid(), name }); save(); render(); toast("Added " + name);
+}
+function viewExerciseDetail() {
+  const id = exerciseDetailId;
+  const best = bestSet(id);
+  const history = [];
+  for (let i = db.logs.length - 1; i >= 0; i--) {
+    const en = db.logs[i].entries.find(e => e.exerciseId === id);
+    if (en) history.push({ date: db.logs[i].date, sets: en.sets });
+  }
+  return `
+    <div class="card center">
+      <div class="muted small">Best set</div>
+      <div class="bigstat">${best ? best.weight + " " + exUnit(id) + " × " + best.reps : "—"}</div>
+      ${best ? `<div class="muted small">${fmtDate(best.date)}</div>` : `<div class="muted small">no logs yet</div>`}
+    </div>
+    <div class="card">
+      <h3>History (${history.length} sessions)</h3>
+      ${history.length ? history.map(h => `
+        <div class="hist-entry"><b>${fmtDate(h.date)}</b>
+          <div class="hist-sets">${fmtSets(h.sets)} ${exUnit(id)}</div></div>`).join("")
+        : `<div class="muted small">Log this exercise in a workout and sessions appear here.</div>`}
+    </div>
+    <div class="card flex"><div class="grow">Units for this exercise</div>${unitSelect(id)}</div>
+    <button class="btn btn-block" onclick="renameExercise('${id}')">Rename exercise</button>
+    <button class="btn btn-danger btn-block mt" onclick="deleteExercise('${id}')">Delete exercise</button>`;
+}
+function renameExercise(id) {
+  const e = exById(id); if (!e) return;
+  const name = prompt("Rename exercise", e.name);
+  if (name && name.trim()) { e.name = name.trim(); save(); render(); }
+}
+function deleteExercise(id) {
+  const used = db.logs.some(l => l.entries.some(e => e.exerciseId === id)) ||
+               db.program.days.some(d => d.items.some(it => it.exerciseId === id));
+  if (used) { toast("In use by your program or history — can't delete"); return; }
+  if (!confirm("Delete " + exName(id) + "?")) return;
+  db.exercises = db.exercises.filter(e => e.id !== id);
+  exerciseDetailId = null; save(); render();
+}
+
+/* ============ settings & program editor ============ */
+function viewSettings() {
+  return `
+    <div class="card">
+      <h3>Program</h3>
+      <div class="muted small mb">${esc(db.program.name)} · ${db.program.days.length} days</div>
+      <button class="btn btn-block" onclick="openProgramEditor()">Edit program</button>
+    </div>
+    <div class="card">
+      <h3>Default units</h3>
+      <div class="flex">
+        <button class="btn grow ${units()==='lbs' ? 'btn-primary' : ''}" onclick="db.settings.units='lbs';save();render()">lbs</button>
+        <button class="btn grow ${units()==='kg' ? 'btn-primary' : ''}" onclick="db.settings.units='kg';save();render()">kg</button>
+      </div>
+      <div class="muted small mt">Each exercise can override this with its own lbs/kg dropdown (in the workout screen or the exercise's page). Labels only — numbers are not converted.</div>
+    </div>
+    <div class="card">
+      <h3>Backup</h3>
+      <button class="btn btn-block mb" onclick="exportData()">Export data (download JSON)</button>
+      <button class="btn btn-block" onclick="openImport()">Import data</button>
+      <div class="muted small mt">Data lives on this phone in your browser. Export occasionally as a backup.</div>
+    </div>
+    <div class="card">
+      <h3>Danger zone</h3>
+      <button class="btn btn-danger btn-block" onclick="resetAll()">Reset everything</button>
+    </div>
+    <div class="muted small center">Lift Log · made with Claude Code</div>`;
+}
+function exportData() {
+  const blob = new Blob([JSON.stringify(db, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "liftlog-backup-" + todayISO() + ".json";
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function openImport() {
+  openModal(`<h2>Import data</h2>
+    <div class="muted small mb">Paste the contents of a backup JSON file. This replaces everything.</div>
+    <textarea id="importTxt" rows="8"></textarea>
+    <button class="btn btn-primary btn-block mt" onclick="doImport()">Import</button>`);
+}
+function doImport() {
+  try {
+    const data = JSON.parse(document.getElementById("importTxt").value);
+    if (!data.exercises || !data.program || !data.logs) throw 0;
+    db = data; save(); closeModal(); render(); toast("Imported");
+  } catch { toast("That doesn't look like a valid backup"); }
+}
+function resetAll() {
+  if (!confirm("Delete ALL data — program, exercises, and history?")) return;
+  if (!confirm("Really sure? This cannot be undone.")) return;
+  db = freshDB(); save(); render();
+}
+
+function openProgramEditor() {
+  const exOptions = sel => [...db.exercises].sort((a,b)=>a.name.localeCompare(b.name))
+    .map(e => `<option value="${e.id}" ${e.id===sel?"selected":""}>${esc(e.name)}</option>`).join("");
+  const dayHtml = db.program.days.map((d, di) => `
+    <div class="card" data-day="${d.id}">
+      <div class="flex mb"><input value="${esc(d.name)}" onchange="db.program.days[${di}].name=this.value;save()" class="grow">
+        <button class="btn btn-sm" style="flex:none" onclick="deleteDay(${di})">✕</button></div>
+      <div class="muted small mb" style="display:grid;grid-template-columns:1fr 56px 64px 30px;gap:6px">
+        <span>Exercise</span><span>Sets</span><span>Reps</span><span></span></div>
+      ${d.items.map((it, ii) => `
+        <div class="prog-item">
+          <select onchange="db.program.days[${di}].items[${ii}].exerciseId=this.value;save()">${exOptions(it.exerciseId)}</select>
+          <input type="number" inputmode="numeric" value="${it.sets}" onchange="db.program.days[${di}].items[${ii}].sets=+this.value||1;save()">
+          <input value="${esc(it.reps)}" placeholder="8-12" onchange="db.program.days[${di}].items[${ii}].reps=this.value;save()">
+          <button class="btn-ghost" onclick="db.program.days[${di}].items.splice(${ii},1);save();openProgramEditor()">✕</button>
+        </div>`).join("")}
+      <button class="btn-ghost" onclick="addProgItem(${di})">+ Add exercise</button>
+    </div>`).join("");
+  openModal(`<h2>Edit program</h2>
+    <input class="mb" value="${esc(db.program.name)}" onchange="db.program.name=this.value;save()" placeholder="Program name">
+    ${dayHtml}
+    <button class="btn btn-block" onclick="addDay()">+ Add day</button>
+    <button class="btn btn-primary btn-block mt" onclick="closeModal();render()">Done</button>`);
+}
+function addProgItem(di) {
+  db.program.days[di].items.push({ exerciseId: db.exercises[0].id, sets: 3, reps: "8-12" });
+  save(); openProgramEditor();
+}
+function addDay() {
+  db.program.days.push({ id: uid(), name: "Day " + (db.program.days.length + 1), items: [] });
+  save(); openProgramEditor();
+}
+function deleteDay(di) {
+  if (!confirm("Delete " + db.program.days[di].name + " and its exercise list? (History is kept.)")) return;
+  db.program.days.splice(di, 1); save(); openProgramEditor();
+}
+
+/* ============ boot ============ */
+render();
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>

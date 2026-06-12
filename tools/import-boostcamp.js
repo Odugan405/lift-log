@@ -145,7 +145,7 @@ for (const r of rows) {
   const g = groups.get(key);
   const exId = ensureEx(ALIAS[r.exercise] || r.exercise);
   if (!g.entries.has(exId)) g.entries.set(exId, []);
-  g.entries.get(exId).push({ set: r.set, weight: r.weight, reps: r.reps });
+  g.entries.get(exId).push({ set: r.set, weight: r.weight, reps: r.reps, unit: r.unit });
 }
 let logN = 0;
 const logs = [...groups.values()]
@@ -155,7 +155,7 @@ const logs = [...groups.values()]
     date: g.date, dayId: null, dayName: g.name,
     entries: [...g.entries.entries()].map(([exerciseId, sets]) => ({
       exerciseId, swappedFromId: null,
-      sets: sets.sort((a, b) => a.set - b.set).map(s => ({ weight: s.weight, reps: s.reps })),
+      sets: sets.sort((a, b) => a.set - b.set).map(s => ({ weight: s.weight, reps: s.reps, unit: s.unit })),
     })),
   }));
 
@@ -170,6 +170,20 @@ for (const [name, e] of byName) {
   const u = unitOf.get(e.id);
   if (u) e.unit = u.unit;
 }
+// Boostcamp allows mixing units within one exercise's history; normalize every
+// set to its exercise's final unit so the numbers stay comparable over time
+function convertWeight(w, from, to) {
+  if (w == null || from === to) return w;
+  return to === "kg" ? Math.round(w / 2.2046226 * 4) / 4 : Math.round(w * 2.2046226 * 2) / 2;
+}
+const unitById = new Map([...byName.values()].map(e => [e.id, e.unit || "lbs"]));
+let converted = 0;
+for (const log of logs) for (const en of log.entries) for (const s of en.sets) {
+  const target = unitById.get(en.exerciseId);
+  if (s.unit !== target) { s.weight = convertWeight(s.weight, s.unit, target); converted++; }
+  delete s.unit;
+}
+console.log("sets converted to exercise unit:", converted);
 
 /* ---- assemble db ---- */
 const dayIds = ["mon", "tue", "thu", "fri"];

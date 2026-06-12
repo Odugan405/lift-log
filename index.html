@@ -64,11 +64,13 @@
   .lasttime{background:var(--card2);border-radius:10px;padding:8px 10px;margin-bottom:10px;
     font-size:13.5px;color:var(--muted);line-height:1.5;}
   .lasttime b{color:var(--text);font-weight:600;}
-  .setrow{display:grid;grid-template-columns:32px 1fr 16px 1fr 44px 44px;gap:7px;align-items:center;margin-bottom:8px;}
+  .setrow{display:grid;grid-template-columns:26px 62px 1fr 14px 1fr 44px;gap:7px;align-items:center;margin-bottom:8px;}
   .setrow .setnum{color:var(--muted);font-size:14px;text-align:center;font-weight:600;
     background:none;border:none;padding:10px 0;}
   .setrow .setnum.warm{color:var(--amber);}
-  .setrow input.rpe{padding:11px 2px;font-size:14px;color:var(--blue);}
+  .prevcell{background:none;border:none;color:var(--muted);font-size:13px;text-align:left;
+    padding:6px 0;font-variant-numeric:tabular-nums;line-height:1.2;}
+  .prevcell:active{color:var(--text);}
   .setrow .x{color:var(--muted);text-align:center;}
   .setrow input{padding:11px 6px;}
   .setrow.done input{border-color:var(--accent2);background:rgba(46,160,67,.12);}
@@ -206,7 +208,19 @@ const exName = id => (exById(id) || { name: "(deleted)" }).name;
 const units = () => db.settings.units;
 // per-exercise unit, falling back to the global default
 const exUnit = id => { const e = exById(id); return (e && e.unit) || db.settings.units; };
-function setExUnit(id, u) { const e = exById(id); if (e) { e.unit = u; save(); render(); } }
+function setExUnit(id, u) {
+  const e = exById(id); if (!e) return;
+  const from = e.unit || db.settings.units;
+  if (from !== u) {
+    // convert this exercise's numbers everywhere so history stays comparable
+    for (const l of db.logs) for (const en of l.entries)
+      if (en.exerciseId === id) en.sets.forEach(s => s.weight = convertWeight(s.weight, from, u));
+    if (db.draft) for (const en of db.draft.entries)
+      if (en.exerciseId === id) en.sets.forEach(s => s.weight = convertWeight(s.weight, from, u));
+    e.unit = u;
+  }
+  save(); render();
+}
 function unitSelect(id) {
   return `<select style="width:auto;padding:4px 6px;font-size:13px;display:inline-block"
     onchange="setExUnit('${id}', this.value)">
@@ -224,8 +238,12 @@ function daysAgo(iso) {
   return d === 0 ? "today" : d === 1 ? "yesterday" : d + " days ago";
 }
 function fmtSets(sets) {
-  return sets.map(s => (s.warmup ? "W " : "") + `${s.weight ?? 0}×${s.reps ?? 0}` +
-    (s.rpe ? ` @${s.rpe}` : "")).join(", ");
+  return sets.map(s => (s.warmup ? "W " : "") + `${s.weight ?? 0}×${s.reps ?? 0}`).join(", ");
+}
+// convert a weight between units, rounding to practical increments (0.5 lb / 0.25 kg)
+function convertWeight(w, from, to) {
+  if (w == null || from === to) return w;
+  return to === "kg" ? Math.round(w / 2.2046226 * 4) / 4 : Math.round(w * 2.2046226 * 2) / 2;
 }
 const est1RM = (w, r) => !w || !r ? 0 : r === 1 ? w : w * (1 + r / 30); // Epley
 function topEst1RM(sets) { // best estimated 1RM among working sets
@@ -386,7 +404,7 @@ function makeEntry(exerciseId, nSets, repsTarget) {
     exerciseId, repsTarget: repsTarget || "", swappedFromId: null,
     sets: Array.from({ length: nSets || 3 }, (_, i) => ({
       weight: last && last.sets[i] ? last.sets[i].weight : (last && last.sets.length ? last.sets[last.sets.length-1].weight : null),
-      reps: null, rpe: null, warmup: last && last.sets[i] ? !!last.sets[i].warmup : false, done: false,
+      reps: null, warmup: last && last.sets[i] ? !!last.sets[i].warmup : false, done: false,
     })),
   };
 }
@@ -397,22 +415,25 @@ function viewActiveWorkout() {
   const blocks = d.entries.map((en, ei) => {
     const last = lastPerformance(en.exerciseId);
     const lastHtml = last
-      ? `<div class="lasttime">Last time <b>(${fmtDate(last.date)}, ${daysAgo(last.date)})</b>: <b>${fmtSets(last.sets)}</b> ${exUnit(en.exerciseId)}</div>`
+      ? `<div class="lasttime">Last done <b>${fmtDate(last.date)}</b> (${daysAgo(last.date)}) · ${exUnit(en.exerciseId)}</div>`
       : `<div class="lasttime">First time logging this exercise — set a baseline!</div>`;
     const ex = exById(en.exerciseId);
-    const rows = en.sets.map((s, si) => `
+    const rows = en.sets.map((s, si) => {
+      const p = last && last.sets[si];
+      return `
       <div class="setrow ${s.done ? "done" : ""}">
         <button class="setnum ${s.warmup ? "warm" : ""}" onclick="toggleWarmup(${ei},${si})"
           title="tap to mark warm-up">${s.warmup ? "W" : si + 1}</button>
-        <input type="number" inputmode="decimal" step="any" placeholder="${last && last.sets[si] ? last.sets[si].weight : "wt"}"
+        <button class="prevcell" onclick="usePrev(${ei},${si})"
+          title="tap to copy">${p ? (p.warmup ? "W " : "") + p.weight + "×" + p.reps : "—"}</button>
+        <input type="number" inputmode="decimal" step="any" placeholder="${p ? p.weight : "wt"}"
           value="${s.weight ?? ""}" onchange="setField(${ei},${si},'weight',this.value)">
         <div class="x">×</div>
-        <input type="number" inputmode="numeric" placeholder="${last && last.sets[si] ? last.sets[si].reps : "reps"}"
+        <input type="number" inputmode="numeric" placeholder="${p ? p.reps : "reps"}"
           value="${s.reps ?? ""}" onchange="setField(${ei},${si},'reps',this.value)">
-        <input type="number" inputmode="decimal" step="any" class="rpe" placeholder="rpe"
-          value="${s.rpe ?? ""}" onchange="setField(${ei},${si},'rpe',this.value)">
         <button class="checkbtn ${s.done ? "on" : ""}" onclick="toggleDone(${ei},${si})">✓</button>
-      </div>`).join("");
+      </div>`;
+    }).join("");
     return `<div class="card ex-block">
       <div class="ex-head">
         <div><div class="name">${esc(exName(en.exerciseId))}</div>
@@ -439,6 +460,14 @@ function viewActiveWorkout() {
         onchange="db.draft.note=this.value;save()">${esc(d.note || "")}</textarea></div>
     <button class="btn btn-primary btn-block mt" onclick="finishWorkout()">Finish workout</button>
     <button class="btn-danger btn btn-block mt" onclick="cancelWorkout()">Discard workout</button>`;
+}
+function usePrev(ei, si) {
+  const en = db.draft.entries[ei];
+  const last = lastPerformance(en.exerciseId);
+  if (!last || !last.sets[si]) return;
+  en.sets[si].weight = last.sets[si].weight;
+  en.sets[si].reps = last.sets[si].reps;
+  save(); render();
 }
 function toggleWarmup(ei, si) {
   const s = db.draft.entries[ei].sets[si];
@@ -470,7 +499,7 @@ function toggleDone(ei, si) {
 function addSet(ei) {
   const sets = db.draft.entries[ei].sets;
   const prev = sets[sets.length - 1];
-  sets.push({ weight: prev ? prev.weight : null, reps: null, rpe: null, warmup: false, done: false });
+  sets.push({ weight: prev ? prev.weight : null, reps: null, warmup: false, done: false });
   save(); render();
 }
 function removeEntry(ei) {
@@ -481,7 +510,7 @@ function finishWorkout() {
   const entries = db.draft.entries
     .map(en => ({ exerciseId: en.exerciseId, swappedFromId: en.swappedFromId,
       sets: en.sets.filter(s => s.done || (s.weight != null && s.reps != null))
-                   .map(s => ({ weight: s.weight, reps: s.reps, rpe: s.rpe, warmup: !!s.warmup })) }))
+                   .map(s => ({ weight: s.weight, reps: s.reps, warmup: !!s.warmup })) }))
     .filter(en => en.sets.length);
   if (!entries.length) { toast("Nothing logged yet — check off some sets first"); return; }
   const existingIdx = db.logs.findIndex(l => l.id === db.draft.id);
